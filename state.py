@@ -151,8 +151,15 @@ class Follower(State):
         from_addr = msg.get('from_addr')
         lastLogIndex = msg.get('lastLogIndex')
         lastLogTerm = msg.get('lastLogTerm')
-        # 如果Candidate的Term不小于当前的currentTerm，并且当前任期内没有为其他节点投票，投赞同票
-        if term >= self.server.currentTerm and self.server.votedFor is None:
+
+        self_lastLogIndex = len(self.server.log)
+        self_lastLogTerm = self.server.log[-1].term if self.server.log else 0
+        # 如果Candidate的Term不小于当前的currentTerm，并且当前任期内没有为其他节点投票，
+        # 并且Candidate的日志至少和当前节点的日志一样新，则投赞同票
+        if (
+            term >= self.server.currentTerm and self.server.votedFor is None
+            and lastLogTerm >= self_lastLogTerm and lastLogIndex >= self_lastLogIndex
+        ):
             self.server.votedFor = from_addr
             self.server.send_msg_to({
                 'type': MessageType.RESPONSE_TO_VOTEREQUEST,
@@ -198,8 +205,8 @@ class Candidate(State):
             'type': MessageType.REQUEST_VOTE, 
             'term': self.server.currentTerm,
             'from_addr': self.server.addr,
-            'lastLogIndex': '',
-            'lastLogTerm': '',
+            'lastLogIndex': len(self.server.log),
+            'lastLogTerm': self.server.log[-1].term if self.server.log else 0,
         })
 
     def on_voteRequest_response_message(self, msg):
