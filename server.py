@@ -17,6 +17,11 @@ class Server(object):
         self.currentTerm = 0
         self.votedFor = None
         self.voteCount = 0
+        self.log = []
+        self.state_machine = []
+        self.commitIndex = 0
+        self.lasApplied = 0
+        self.leader = None
         self.cluster_addrs = cluster_addrs
         self.otherServer_Addrs = list(filter(lambda x: x != self.addr, self.cluster_addrs))
 
