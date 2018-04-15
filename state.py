@@ -7,6 +7,8 @@ from collections import namedtuple
 
 Entry = namedtuple('Entry', ['term', 'command'])
 
+# FIXME: leader 选举有时候有些慢，要好几轮才能选出来，可能是任期比较的问题
+
 class MessageType(object):
     REQUEST_VOTE = 0
     RESPONSE_TO_VOTEREQUEST = 1
@@ -49,11 +51,18 @@ class State(object):
         elif msg.get('type') == MessageType.CLIENT_COMMAND:
             self.on_client_command_message(msg)
 
+    def on_client_message(self, msg):
+        """
+        处理客户端的命令请求和响应消息
+        """
+        if msg.get('type') == MessageType.CLIENT_COMMAND:
+            self.on_client_command_message(msg)
+
     def change_to_state(self, state):
         state.set_server(self.server)
         state.server.voteCount = 0
         state.server.votedFor = None
-        print(time.time())
+        print(time.asctime())
 
     def change_to_candidate(self):
         print('STATE CHANGED --- become candidate')
@@ -70,6 +79,7 @@ class State(object):
         print('STATE CHANGED --- become leader')
         leader = Leader()
         self.change_to_state(leader)
+        self.server.leader = self.server.addr
         leader.init_run()
 
     def on_requestVote_message(self, msg):
@@ -127,6 +137,9 @@ class Follower(State):
         if term < self.server.currentTerm:
             self.server.send_msg_to(resp_msg, from_addr)
         
+        if self.server.leader != from_addr:
+            self.server.leader = from_addr
+
         # 未能匹配到一致的prev log
         elif(
             len(self.server.log) < prevLogIndex 
@@ -198,7 +211,7 @@ class Candidate(State):
     def do_election(self):
         self.server.currentTerm += 1
         self.server.voteCount = 0
-        print('Term[{}] do election...{}'.format(self.server.currentTerm, time.time()))
+        print('Term[{}] do election...{}'.format(self.server.currentTerm, time.asctime()))
         self.server.votedFor = self.server.addr
         self.server.voteCount += 1
         self.server.broadcast({
@@ -290,7 +303,10 @@ class Leader(State):
             matchIndex = msg.get('matchIndex')
             self.matchIndex[addr] = matchIndex
             self.nextIndex[addr] = len(self.server.log) + 1
+            # 取半数就可，因为matchIndex没记录自身
             self.server.commitIndex = self._get_majority_minNum(self.matchIndex.values())
+            # print(self.matchIndex)
+            # print(self.server.commitIndex)
         else:
             if(addr in self.nextIndex.keys() and self.nextIndex.get(addr)>0):
                 self.nextIndex[addr] -= 1
@@ -307,10 +323,10 @@ class Leader(State):
             
     def _get_majority_minNum(self, l):
         """
-        获取一个list中大多数item都大于的最小item
+        获取一个list中半数及以上item都大于的最小item
         """
         # 大多数的最少数量
-        majority = math.ceil(float(len(l)+1)/2)
-        return sorted(l, reverse=True)[majority-1: majority][0]
+        majority = math.ceil(float(len(l))/2)
+        return sorted(l, reverse=True)[majority-1]
 
     

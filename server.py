@@ -6,6 +6,8 @@ from threading import Thread, Event
 
 from state import Follower
 
+from state_machine import StateMachine
+
 class Server(object):
     """
     Server类定义服务节点，存储相关状态
@@ -18,7 +20,7 @@ class Server(object):
         self.votedFor = None
         self.voteCount = 0
         self.log = []
-        self.state_machine = []
+        self.state_machine = StateMachine()
         self.commitIndex = 0
         self.lasApplied = 0
         self.leader = None
