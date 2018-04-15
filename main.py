@@ -29,6 +29,7 @@ def execute(command):
             res = server.state_machine.execute(entry.command)
             server.lastApplied = server.commitIndex
             return res
+    return ''
 
 def redirect_to_leader(server, path):
     leader_ip = server.leader.split(':')[0]
@@ -47,7 +48,8 @@ def get_value(key):
             'type': CommandType.GET,
             'argv': (key,)
         }
-        return execute(command)
+        res = str(execute(command))
+        return res if res else ''
     else:
         print('get value from leader')
         return redirect_to_leader(server, '/get/'+key)
@@ -59,7 +61,8 @@ def set_value(key, value):
             'type': CommandType.SET,
             'argv': (key, value)
         }
-        return str(execute(command))
+        res = str(execute(command))
+        return res if res else ''
     else:
         return redirect_to_leader(server, '/set/'+key+'/'+value)
 
