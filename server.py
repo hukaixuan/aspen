@@ -35,7 +35,7 @@ class Server(object):
         self._udp_socket.settimeout(1)
 
         self.follower_timeout_event = Event()
-        self.candidate_timeout_event = Event()
+        # self.candidate_timeout_event = Event()
 
     def serve(self):
         run_thread = Thread(target=self.run)

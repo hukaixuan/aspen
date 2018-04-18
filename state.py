@@ -7,7 +7,6 @@ from collections import namedtuple
 
 Entry = namedtuple('Entry', ['term', 'command'])
 
-# FIXME: leader 选举有时候有些慢，要好几轮才能选出来，可能是任期比较的问题
 
 class MessageType(object):
     REQUEST_VOTE = 0
@@ -75,7 +74,7 @@ class State(object):
         self.change_to_state(follower)
 
     def change_to_leader(self):
-        self.server.candidate_timeout_event.clear()
+        # self.server.candidate_timeout_event.clear()
         print('STATE CHANGED --- become leader')
         leader = Leader()
         self.change_to_state(leader)
@@ -160,6 +159,8 @@ class Follower(State):
             
 
     def on_requestVote_message(self, msg):
+        # 重置 election_timeout
+        self.server.follower_timeout_event.set()
         term = msg.get('term')
         from_addr = msg.get('from_addr')
         lastLogIndex = msg.get('lastLogIndex')
@@ -180,6 +181,7 @@ class Follower(State):
                 'from_addr': self.server.addr,
                 'voteGranted': True,
             }, from_addr)
+            print("Term{}: 投赞成票给{}".format(term,from_addr))
         # 否则投反对票
         else:
             self.server.send_msg_to({
@@ -188,9 +190,14 @@ class Follower(State):
                 'from_addr': self.server.addr,
                 'voteGranted': False,
             }, from_addr)
+            print("Term{}: 投反对票给{}".format(term,from_addr))
         
 
-    def _gen_timeout(self, start=0.15, end=0.3):
+    # NOTE:论文写的是150-300ms，在该实现下150-300这个时间段有点儿短，可能需要多轮才能选出leader
+    # 原因：一个candidate发起requestVote请求，follower的监听线程还未来得及处理该消息
+    # 或者Candidate竞选成功成为leader发起了appendEntries请求，
+    # follower的监听线程还未来得及处理该消息便timeout成为candidate并且任期大，所以leader收到该节点的消息成为了follower
+    def _gen_timeout(self, start=0.3, end=0.6):
         """
         生成start到end范围之间的timeout
         """
@@ -206,7 +213,9 @@ class Candidate(State):
 
     def run(self):
         self.do_election()
-        self.server.candidate_timeout_event.wait(self._gen_timeout())
+        time.sleep(self._gen_timeout())
+        # NOTE: Candidate用不着reset timeout
+        # self.server.candidate_timeout_event.wait(self._gen_timeout())
 
     def do_election(self):
         self.server.currentTerm += 1
@@ -225,12 +234,12 @@ class Candidate(State):
     def on_voteRequest_response_message(self, msg):
         term = msg.get('term')
         voteGranted = msg.get('voteGranted')
-        # 如果收到同意投票的消息
-        if voteGranted:
+        # 如果收到此轮的同意投票的消息
+        if term == self.server.currentTerm and voteGranted:
             self.server.voteCount += 1
         # 若得到大多数节点的选票，成为leader
         if self.server.voteCount*2 > len(self.server.cluster_addrs):
-            self.server.candidate_timeout_event.set()
+            # self.server.candidate_timeout_event.set()
             self.change_to_leader()
 
     def on_appendentries_message(self, msg):
@@ -262,6 +271,7 @@ class Leader(State):
 
     def run(self):
         self.append_entries()
+        time.sleep(self.heartbeat_interval)
 
     def append_entries(self):
         for addr in self.server.otherServer_Addrs:
@@ -281,7 +291,6 @@ class Leader(State):
                 'leaderCommit': self.server.commitIndex,
             }
             self.server.send_msg_to(msg, addr)
-        time.sleep(self.heartbeat_interval)
         # print('Term[{}]leader is doing heartbeat...'.format(self.server.currentTerm))
 
     def on_client_command_message(self, msg):
