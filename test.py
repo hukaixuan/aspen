@@ -3,9 +3,14 @@ import socket
 import json
 import sys
 
+from command import CommandType
+
 msg = {
     'type': 4,
-    'command': 'goooooood'
+    'command': {
+        'type': CommandType.SET,
+        'argv': ('key1', 'value1')
+    }
 }
 
 ip = '127.0.0.1'
