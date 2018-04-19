@@ -312,8 +312,15 @@ class Leader(State):
             matchIndex = msg.get('matchIndex')
             self.matchIndex[addr] = matchIndex
             self.nextIndex[addr] = len(self.server.log) + 1
-            # 取半数就可，因为matchIndex没记录自身
-            self.server.commitIndex = self._get_majority_minNum(self.matchIndex.values())
+            # 半数及以上就行，因为matchIndex不包含自身
+            last_majority_index = self._get_majority_minNum(self.matchIndex.values())
+            # 多数节点(包括自身)都同意的最新的log，并且是当前任期内的log，更新commitIndex
+            if (
+                last_majority_index != 0 and
+                len(self.server.log)>=last_majority_index and
+                self.server.log[last_majority_index-1].term == self.server.currentTerm
+            ):
+                self.server.commitIndex = last_majority_index
             # print(self.matchIndex)
             # print(self.server.commitIndex)
         else:
