@@ -9,6 +9,7 @@ from flask import Flask
 
 from aspen.server import Server
 from aspen.command import CommandType
+from aspen.utils.log import logger
 
 app = Flask(__name__)
 
@@ -25,7 +26,7 @@ def execute(command):
     server.log.append(Entry(server.currentTerm, command))
     current_log_index = len(server.log)
     server.state._refresh_nextIndex()
-    print(server.log)
+    logger.debug(server.log)
     while True:
         # log entry 被大多数节点复制
         is_commited = (server.commitIndex == current_log_index)
@@ -33,7 +34,7 @@ def execute(command):
         has_not_executed = (server.lastApplied < server.commitIndex)
         if is_commited and has_not_executed:
             entry = server.log[current_log_index-1]
-            print(entry.command)
+            logger.debug(entry.command)
             res = server.state_machine.execute(entry.command)
             server.lastApplied = server.commitIndex
             return res
@@ -43,7 +44,7 @@ def redirect_to_leader(server, path):
     leader_ip = server.leader.split(':')[0]
     leader_port = str(int(server.leader.split(':')[1]) - 1000)
     url = 'http://' + leader_ip + ':' + leader_port + path
-    print('redirect to url:', url)
+    logger.debug('redirect to url:{}'.format(url))
     u = request.urlopen(url)
     resp = u.read().decode(u.headers.get_content_charset())
     return str(resp)
@@ -51,7 +52,7 @@ def redirect_to_leader(server, path):
 @app.route('/get/<key>')
 def get_value(key):
     if server.leader == server.addr:
-        print('get value from self')
+        logger.debug('get value from self')
         command = {
             'type': CommandType.GET,
             'argv': [key,]
@@ -59,7 +60,7 @@ def get_value(key):
         res = server.state_machine.execute(command)
         return res if res else ''
     else:
-        print('get value from leader')
+        logger.debug('get value from leader')
         return redirect_to_leader(server, '/get/'+key)
 
 @app.route('/set/<key>/<value>')
@@ -102,17 +103,17 @@ def commit_logEntry_2_statemachine():
     """
     commit logEntry to statemachine(for follower)
     """
-    print('running commit logEntry to statemachine thread....')
+    logger.debug('running commit logEntry to statemachine thread....')
     while True:
         if (
             server.addr != server.leader and
             server.commitIndex > server.lastApplied
         ):
             for entry in server.log[server.lastApplied:server.commitIndex]:
-                print(server.log)
-                print(entry.command)
+                logger.debug(server.log)
+                logger.debug(entry.command)
                 res = server.state_machine.execute(entry.command)
-                print(res)
+                logger.debug(res)
             server.lastApplied = server.commitIndex
         time.sleep(1)
 

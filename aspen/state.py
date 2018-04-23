@@ -4,6 +4,7 @@ import time
 import math
 from threading import Event
 from collections import namedtuple
+from .utils.log import logger
 
 Entry = namedtuple('Entry', ['term', 'command'])
 
@@ -35,7 +36,7 @@ class State(object):
         """
         收到消息时的处理逻辑
         """
-        # print(msg)
+        # logger.debug(msg)
         if msg.get('term', 0) > self.server.currentTerm:
             self.server.currentTerm = msg.get('term')
             self.change_to_follower()
@@ -61,21 +62,20 @@ class State(object):
         state.set_server(self.server)
         state.server.voteCount = 0
         state.server.votedFor = None
-        print(time.asctime())
 
     def change_to_candidate(self):
-        print('STATE CHANGED --- become candidate')
+        logger.debug('STATE CHANGED --- become candidate')
         candidate = Candidate()
         self.change_to_state(candidate)
 
     def change_to_follower(self):
-        print('STATE CHANGED --- become follower')
+        logger.debug('STATE CHANGED --- become follower')
         follower = Follower()
         self.change_to_state(follower)
 
     def change_to_leader(self):
         # self.server.candidate_timeout_event.clear()
-        print('STATE CHANGED --- become leader')
+        logger.debug('STATE CHANGED --- become leader')
         leader = Leader()
         self.change_to_state(leader)
         self.server.leader = self.server.addr
@@ -110,7 +110,7 @@ class Follower(State):
         
         # 如果有其他地方触发set(), 重置并进行下一轮timeout
         if self.server.follower_timeout_event.is_set():
-            # print('Term[{}] reset timeout {}'.format(self.server.currentTerm, time.time()))
+            # logger.debug('Term[{}] reset timeout {}'.format(self.server.currentTerm, time.time()))
             self.server.follower_timeout_event.clear()
         # 否则说明在此次timeout过程中，没有触发set(触发没有收到其他节点的消息)，timeout完成，成为candidate
         else:
@@ -155,8 +155,7 @@ class Follower(State):
             resp_msg['success'] = True
             self.server.send_msg_to(resp_msg, from_addr)
             if entries:
-                print('entries:', entries)
-                print('log:', self.server.log)
+                logger.debug(self.server.log)
             
 
     def on_requestVote_message(self, msg):
@@ -182,7 +181,7 @@ class Follower(State):
                 'from_addr': self.server.addr,
                 'voteGranted': True,
             }, from_addr)
-            print("Term{}: 投赞成票给{}".format(term,from_addr))
+            logger.debug("Term{}: 投赞成票给{}".format(term,from_addr))
         # 否则投反对票
         else:
             self.server.send_msg_to({
@@ -191,7 +190,7 @@ class Follower(State):
                 'from_addr': self.server.addr,
                 'voteGranted': False,
             }, from_addr)
-            print("Term{}: 投反对票给{}".format(term,from_addr))
+            logger.debug("Term{}: 投反对票给{}".format(term,from_addr))
         
 
     # NOTE:论文写的是150-300ms，在该实现下150-300这个时间段有点儿短，可能需要多轮才能选出leader
@@ -221,7 +220,7 @@ class Candidate(State):
     def do_election(self):
         self.server.currentTerm += 1
         self.server.voteCount = 0
-        print('Term[{}] do election...{}'.format(self.server.currentTerm, time.asctime()))
+        logger.debug('Term[{}] do election...{}'.format(self.server.currentTerm, time.asctime()))
         self.server.votedFor = self.server.addr
         self.server.voteCount += 1
         self.server.broadcast({
@@ -292,7 +291,7 @@ class Leader(State):
                 'leaderCommit': self.server.commitIndex,
             }
             self.server.send_msg_to(msg, addr)
-        # print('Term[{}]leader is doing heartbeat...'.format(self.server.currentTerm))
+        # logger.debug('Term[{}]leader is doing heartbeat...'.format(self.server.currentTerm))
 
     def on_client_command_message(self, msg):
         """
@@ -302,13 +301,13 @@ class Leader(State):
         command = msg.get('command')
         self.server.log.append(Entry(self.server.currentTerm, command))
         self._refresh_nextIndex()
-        print(self.server.log)
+        logger.debug(self.server.log)
 
     def on_appendentries_response_message(self, msg):
-        # print('appendentries respone msg: {}'.format(msg))
+        # logger.debug('appendentries respone msg: {}'.format(msg))
         prev_log_match = msg.get('success')
         addr = msg.get('addr')
-        # print(self.nextIndex.keys(), self.nextIndex.get(addr))
+        # logger.debug(self.nextIndex.keys(), self.nextIndex.get(addr))
         if prev_log_match:
             matchIndex = msg.get('matchIndex')
             self.matchIndex[addr] = matchIndex
@@ -322,17 +321,17 @@ class Leader(State):
                 self.server.log[last_majority_index-1].term == self.server.currentTerm
             ):
                 self.server.commitIndex = last_majority_index
-            # print(self.matchIndex)
-            # print(self.server.commitIndex)
+            # logger.debug(self.matchIndex)
+            # logger.debug(self.server.commitIndex)
         else:
             if(addr in self.nextIndex.keys() and self.nextIndex.get(addr)>0):
                 self.nextIndex[addr] -= 1
-        # print('='*50)
-        # print('AppppResp....')
-        # print(msg)
-        # print(self.nextIndex)
-        # print(self.matchIndex)
-        # print('='*50)
+        # logger.debug('='*50)
+        # logger.debug('AppppResp....')
+        # logger.debug(msg)
+        # logger.debug(self.nextIndex)
+        # logger.debug(self.matchIndex)
+        # logger.debug('='*50)
 
     def _refresh_nextIndex(self):
         for addr in self.server.otherServer_Addrs:
