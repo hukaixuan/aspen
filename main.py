@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import sys
 import time
+import string
 from threading import Thread
 from collections import namedtuple
-from urllib import request
+from urllib import request, parse
 
 from flask import Flask
 
@@ -43,7 +44,7 @@ def execute(command):
 def redirect_to_leader(server, path):
     leader_ip = server.leader.split(':')[0]
     leader_port = str(int(server.leader.split(':')[1]) - 1000)
-    url = 'http://' + leader_ip + ':' + leader_port + path
+    url = parse.quote('http://'+leader_ip +':'+leader_port+path, safe=string.printable)
     logger.debug('redirect to url:{}'.format(url))
     u = request.urlopen(url)
     resp = u.read().decode(u.headers.get_content_charset())
@@ -83,7 +84,7 @@ def get_all_items():
             'argv': []
         }
         res = server.state_machine.execute(command)
-        return res if res else ''
+        return str(res)
     else:
         return redirect_to_leader(server, '/items')
 
