@@ -19,6 +19,9 @@ server = Server(addr, cluster_addrs)
 Entry = namedtuple('Entry', ['term', 'command'])
 
 def execute(command):
+    """
+    记录日志并等待大多数client响应，commit到state machine
+    """
     server.log.append(Entry(server.currentTerm, command))
     current_log_index = len(server.log)
     server.state._refresh_nextIndex()
@@ -53,7 +56,7 @@ def get_value(key):
             'type': CommandType.GET,
             'argv': [key,]
         }
-        res = str(execute(command))
+        res = server.state_machine.execute(command)
         return res if res else ''
     else:
         print('get value from leader')
@@ -78,7 +81,8 @@ def get_all_items():
             'type': CommandType.ITEMS,
             'argv': []
         }
-        return str(execute(command))
+        res = server.state_machine.execute(command)
+        return res if res else ''
     else:
         return redirect_to_leader(server, '/items')
 
