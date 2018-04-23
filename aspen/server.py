@@ -4,9 +4,9 @@ import json
 import time
 from threading import Thread, Event
 
-from state import Follower
+from .state import Follower
 
-from state_machine import StateMachine
+from .state_machine import StateMachine
 
 class Server(object):
     """
@@ -20,9 +20,9 @@ class Server(object):
         self.votedFor = None
         self.voteCount = 0
         self.log = []
-        self.state_machine = StateMachine()
+        self.state_machine = StateMachine(storage=self.addr+'_db')
         self.commitIndex = 0
-        self.lasApplied = 0
+        self.lastApplied = 0
         self.leader = None
         self.cluster_addrs = cluster_addrs
         self.otherServer_Addrs = list(filter(lambda x: x != self.addr, self.cluster_addrs))

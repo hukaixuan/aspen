@@ -122,7 +122,7 @@ class Follower(State):
         from_addr = msg.get('from_addr')
         prevLogIndex = msg.get('prevLogIndex')
         prevLogTerm = msg.get('prevLogTerm')
-        entries = [Entry(entry[0], entry) for entry in msg.get('entries')]
+        entries = [Entry(entry[0], entry[1]) for entry in msg.get('entries')]
         leaderCommit = msg.get('leaderCommit')
 
         resp_msg = {
@@ -155,6 +155,7 @@ class Follower(State):
             resp_msg['success'] = True
             self.server.send_msg_to(resp_msg, from_addr)
             if entries:
+                print('entries:', entries)
                 print('log:', self.server.log)
             
 

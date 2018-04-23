@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import sys
+import time
 from threading import Thread
 from collections import namedtuple
 from urllib import request
 
 from flask import Flask
 
-from server import Server
-from command import CommandType
+from aspen.server import Server
+from aspen.command import CommandType
 
 app = Flask(__name__)
 
@@ -23,9 +24,13 @@ def execute(command):
     server.state._refresh_nextIndex()
     print(server.log)
     while True:
-        # print(server.commitIndex, current_log_index)
-        if server.commitIndex == current_log_index:
+        # log entry 被大多数节点复制
+        is_commited = (server.commitIndex == current_log_index)
+        # 该entry还未执行
+        has_not_executed = (server.lastApplied < server.commitIndex)
+        if is_commited and has_not_executed:
             entry = server.log[current_log_index-1]
+            print(entry.command)
             res = server.state_machine.execute(entry.command)
             server.lastApplied = server.commitIndex
             return res
@@ -37,7 +42,7 @@ def redirect_to_leader(server, path):
     url = 'http://' + leader_ip + ':' + leader_port + path
     print('redirect to url:', url)
     u = request.urlopen(url)
-    resp = u.read()
+    resp = u.read().decode(u.headers.get_content_charset())
     return str(resp)
 
 @app.route('/get/<key>')
@@ -46,7 +51,7 @@ def get_value(key):
         print('get value from self')
         command = {
             'type': CommandType.GET,
-            'argv': (key,)
+            'argv': [key,]
         }
         res = str(execute(command))
         return res if res else ''
@@ -59,7 +64,7 @@ def set_value(key, value):
     if server.leader == server.addr:
         command = {
             'type': CommandType.SET,
-            'argv': (key, value)
+            'argv': [key, value]
         }
         res = str(execute(command))
         return res if res else ''
@@ -71,7 +76,7 @@ def get_all_items():
     if server.leader == server.addr:
         command = {
             'type': CommandType.ITEMS,
-            'argv': ()
+            'argv': []
         }
         return str(execute(command))
     else:
@@ -82,15 +87,37 @@ def del_value(key):
     if server.leader == server.addr:
         command = {
             'type': CommandType.DELETE,
-            'argv': (key,)
+            'argv': [key,]
         }
         return str(execute(command))
     else:
         return redirect_to_leader(server, '/del/'+key)
-    
 
+
+def commit_logEntry_2_statemachine():
+    """
+    commit logEntry to statemachine(for follower)
+    """
+    print('running commit logEntry to statemachine thread....')
+    while True:
+        if (
+            server.addr != server.leader and
+            server.commitIndex > server.lastApplied
+        ):
+            for entry in server.log[server.lastApplied:server.commitIndex]:
+                print(server.log)
+                print(entry.command)
+                res = server.state_machine.execute(entry.command)
+                print(res)
+            server.lastApplied = server.commitIndex
+        time.sleep(1)
+
+    
 if __name__ == '__main__':
-    client_thread = Thread(target=app.run, args=(server.ip, server.port-1000))
+    # client_thread = Thread(target=app.run, args=(server.ip, server.port-1000))
+    client_thread = Thread(target=app.run, args=('0.0.0.0', server.port-1000))
+    commit_entry_thread = Thread(target=commit_logEntry_2_statemachine)
     client_thread.start()
+    commit_entry_thread.start()
     server.serve()
     

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import shelve
-from command import CommandType
+from .command import CommandType
 
 class StateMachine(object):
     def __init__(self, storage='db'):
@@ -24,7 +24,7 @@ class StateMachine(object):
         return res
 
     def _get(self, key):
-        with shelve.open(self.storage, 'r') as db:
+        with shelve.open(self.storage) as db:
             res = db.get(key)
         return res
 

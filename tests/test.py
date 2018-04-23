@@ -3,7 +3,7 @@ import socket
 import json
 import sys
 
-from command import CommandType
+from aspen.command import CommandType
 
 msg = {
     'type': 4,
